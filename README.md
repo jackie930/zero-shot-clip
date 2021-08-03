@@ -32,7 +32,7 @@ python source/train.py
 ```
 
 result looks like below:
-
+![image](./res.png)
 
 
 
