@@ -34,5 +34,9 @@ python source/train.py
 result looks like below:
 ![image](./res.png)
 
+## clip for image search
 
+refer to `source/clip-imagesearch.ipynb` for details
 
+result looks like below:
+![image](./res-search.png)
