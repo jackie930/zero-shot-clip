@@ -15,9 +15,16 @@ from torchvision import datasets, models, transforms
 import time
 import os
 import copy
+import shutil
 
 
-def train_model(model, dataloaders, criterion, optimizer, device, num_epochs=25, is_inception=False):
+def self_mkdir(folder):
+    isExists = os.path.exists(folder)
+    if not isExists:
+        os.makedirs(folder)
+        print('path of %s is build' % (folder))
+
+def train_model(model, dataloaders, criterion, optimizer, device, classes, num_epochs=25, is_inception=False):
     since = time.time()
 
     val_acc_history = []
@@ -38,13 +45,15 @@ def train_model(model, dataloaders, criterion, optimizer, device, num_epochs=25,
 
             running_loss = 0.0
             running_corrects = 0
+            class_0 = []
+            class_1 = []
 
             # Iterate over data.
             for inputs, labels in dataloaders[phase]:
                 inputs = inputs.to(device)
                 labels = labels.to(device)
-                #print ("inputs: ",inputs)
-                #print ("labels: ",labels)
+                # print ("inputs: ",inputs)
+                # print ("labels: ",labels)
 
                 # zero the parameter gradients
                 optimizer.zero_grad()
@@ -87,10 +96,41 @@ def train_model(model, dataloaders, criterion, optimizer, device, num_epochs=25,
                 running_loss += loss.item() * inputs.size(0)
                 running_corrects += torch.sum(preds == labels.data)
 
+                correct_pred = {classname: 0 for classname in classes}
+                total_pred = {classname: 0 for classname in classes}
+
+                # accuracy for each class
+                #print("labels.data", labels.data)
+                #print("preds", preds)
+
+                for label, prediction in zip(labels.data, preds):
+                    if label == prediction:
+                        correct_pred[classes[label]] += 1
+                    total_pred[classes[label]] += 1
+
+                #print("correct pred", correct_pred)
+                #print("total_pred ", total_pred)
+
+                for label in range(len(classes)):
+                    if label ==0:
+                        if total_pred[classes[label]]!= 0:
+                            class_0.append(correct_pred[classes[label]]/total_pred[classes[label]])
+                        else:
+                            class_0.append(1)
+                    else:
+                        if total_pred[classes[label]] != 0:
+                            class_1.append(correct_pred[classes[label]] / total_pred[classes[label]])
+                            class_1.append(1)
+
             epoch_loss = running_loss / len(dataloaders[phase].dataset)
             epoch_acc = running_corrects.double() / len(dataloaders[phase].dataset)
 
             print('{} Loss: {:.4f} Acc: {:.4f}'.format(phase, epoch_loss, epoch_acc))
+
+            print('{} class {} accuracy {}'.format(phase, classes[0],sum(class_0)/len(class_0)))
+            print('{} class {} accuracy {}'.format(phase, classes[1],sum(class_1)/len(class_1)))
+
+
 
             # deep copy the model
             if phase == 'Validation' and epoch_acc > best_acc:
@@ -194,10 +234,10 @@ def main(model_name):
     data_dir = "./data"
 
     # Models to choose from [resnet, alexnet, vgg, squeezenet, densenet, inception]
-    #model_name = "resnet"
+    # model_name = "resnet"
 
     # Number of classes in the dataset
-    num_classes = 10
+    num_classes = 2
 
     # Batch size for training (change depending on how much memory you have)
     batch_size = 16
@@ -232,16 +272,17 @@ def main(model_name):
     print("Initializing Datasets and Dataloaders...")
 
     # Create training and validation datasets
-    image_datasets = {x: datasets.ImageFolder(os.path.join(data_dir, x), data_transforms[x]) for x in ['Train', 'Validation']}
-    
+    image_datasets = {x: datasets.ImageFolder(os.path.join(data_dir, x), data_transforms[x]) for x in
+                      ['Train', 'Validation']}
+
     # Create training and validation dataloaders
     dataloaders_dict = {
         x: torch.utils.data.DataLoader(image_datasets[x], batch_size=batch_size, shuffle=True, num_workers=4) for x in
         ['Train', 'Validation']}
 
     classes, class_to_idx = image_datasets['Train']._find_classes('./data/Train')
-    print ("classes: ",classes)
-    print ("class_to_idx: ",class_to_idx)
+    print("classes: ", classes)
+    print("class_to_idx: ", class_to_idx)
 
     # Detect if we have a GPU available
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -273,20 +314,23 @@ def main(model_name):
     criterion = nn.CrossEntropyLoss()
 
     # Train and evaluate
-    model_ft, hist = train_model(model_ft, dataloaders_dict, criterion, optimizer_ft, device, num_epochs=num_epochs,
+    model_ft, hist = train_model(model_ft, dataloaders_dict, criterion, optimizer_ft, device, classes,
+                                 num_epochs=num_epochs,
                                  is_inception=(model_name == "inception"))
 
     # 保存整个网络
-    torch.save(model_ft.state_dict(), './model.pth')
+    self_mkdir('./res')
+    model_save_name = './res/' + model_name + '.pth'
+    torch.save(model_ft.state_dict(), model_save_name)
 
     print("train finish!")
-    #print(classes)
-    #print(class_to_idx)
+    # print(classes)
+    # print(class_to_idx)
 
 
 if __name__ == '__main__':
-    #Models to choose from [resnet, alexnet, vgg, squeezenet, densenet, inception]
+    # Models to choose from [resnet, alexnet, vgg, squeezenet, densenet, inception]
     for model_name in ["resnet", "alexnet", "vgg", "squeezenet", "densenet", "inception"]:
-        print ("experiment on: ", model_name)
+        print("experiment on: ", model_name)
         main(model_name)
-        
+
